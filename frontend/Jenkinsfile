@@ -1,0 +1,136 @@
+/*
+  React Application Deployment Pipeline
+  Maintained by: DevOps Engineer @sak_shetty
+  Purpose: Build & Deploy React app, replacing existing instance if running.
+*/
+
+pipeline {
+    agent any
+
+    stages {
+
+        stage('Pipeline Info') {
+            steps {
+                echo "============================================================================="
+                echo "⚛️  React Application Deployment Pipeline"
+                echo "👨‍💻 Maintained by: DevOps Engineer @sak_shetty"
+                echo "🎯 Purpose: Build & Deploy React app, replacing existing instance if running"
+                echo "============================================================================="
+            }
+        }
+
+        stage('Install Node.js if not present') {
+            steps { 
+                sh '''
+                    if command -v node >/dev/null 2>&1; then
+                        echo "✅ Node.js already installed. Skipping installation."
+                        node -v
+                        npm -v
+                    else
+                        echo "🔹 Installing Node.js LTS (20.x)..."
+                        sudo apt update && sudo apt upgrade -y
+                        sudo apt install -y curl
+                        curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+                        sudo apt install -y nodejs
+                        echo "✅ Node.js installation complete."
+                        node -v
+                        npm -v
+                    fi
+                '''
+            }
+            post {
+                success {
+                    echo '✅ Node.js check/install completed successfully.'
+                }
+                failure {
+                    echo '❌ Failed to install Node.js.'
+                }
+            }
+        }
+
+        stage('Install Dependencies') {
+            steps {
+                sh '''
+                    echo "📦 Installing React dependencies..."
+                    npm install
+                '''
+            }
+            post {
+                success {
+                    echo '✅ Dependencies installed successfully.'
+                }
+                failure {
+                    echo '❌ Failed to install dependencies.'
+                }
+            }
+        }
+
+        stage('Build React App') {
+            steps {
+                sh '''
+                    echo "🏗 Building React app..."
+                    npm run build
+                '''
+            }
+            post {
+                success {
+                    echo '✅ React app built successfully.'
+                }
+                failure {
+                    echo '❌ React app build failed.'
+                }
+            }
+        }
+
+        stage('Stop Existing React App') {
+            steps {
+                sh '''
+                    echo "🛑 Checking for running React app..."
+                    if pgrep -f "node.*serve" > /dev/null; then
+                        echo "Stopping running React app..."
+                        sudo pkill -f "node.*serve"
+                        echo "✅ Old app stopped."
+                    else
+                        echo "ℹ No running React app found."
+                    fi
+                '''
+            }
+            post {
+                success {
+                    echo '✅ Old React app stop stage completed successfully.'
+                }
+                failure {
+                    echo '❌ Failed to stop old React app.'
+                }
+            }
+        }
+
+        stage('Start New React App') {
+            steps {
+                sh '''
+                    echo "🚀 Starting new React app..."
+                    npm install -g serve
+                    nohup npx serve -s build -l 3000 > /dev/null 2>&1 &
+                    echo "✅ React app deployed and running on port 3000."
+                '''
+            }
+            post {
+                success {
+                    echo '✅ React app started successfully.'
+                }
+                failure {
+                    echo '❌ Failed to start React app.'
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "🎯 Deployment completed successfully - React app live on port 3000."
+        }
+        failure {
+            echo "❌ Deployment failed - Check Jenkins logs."
+        }
+    }
+}

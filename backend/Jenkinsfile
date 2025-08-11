@@ -1,0 +1,128 @@
+/*
+  Java Spring Boot Deployment Pipeline with MySQL
+  Maintained by: DevOps Engineer @sak_shetty
+  Purpose: Build & Deploy Spring Boot app, replacing existing instance if running.
+*/
+
+pipeline {
+    agent any
+    tools {
+        maven 'maven' // Maven tool name configured in Jenkins
+    }
+
+    stages {
+
+        stage('Pipeline Info') {
+            steps {
+                echo "=============================================="
+                echo "🚀 Java Spring Boot Deployment Pipeline"
+                echo "💾 MySQL Integration"
+                echo "👨‍💻 Maintained by: DevOps Engineer @sak_shetty"
+                echo "🎯 Purpose: Build & Deploy Spring Boot app"
+                echo "=============================================="
+            }
+        }
+
+        stage('Install MySQL if not present') {
+            steps {
+                sh '''
+                    if command -v mysql >/dev/null 2>&1; then
+                        echo "✅ MySQL already installed. Skipping installation."
+                        mysql --version
+                    else
+                        echo "🔹 Installing MySQL..."
+                        sudo apt update && sudo apt upgrade -y
+                        sudo apt install -y mysql-server
+                        echo "✅ MySQL installation complete."
+                        mysql --version
+                        
+                        echo "🔹 Configuring MySQL root access..."
+                        sudo mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY '1234';"
+                        sudo mysql -e "CREATE USER IF NOT EXISTS 'root'@'%' IDENTIFIED BY '1234';"
+                        sudo mysql -e "GRANT ALL PRIVILEGES ON *.* TO 'root'@'%' WITH GRANT OPTION;"
+                        sudo mysql -e "FLUSH PRIVILEGES;"
+                        
+                        echo "🔹 Allowing remote connections..."
+                        sudo sed -i 's/^bind-address.*/bind-address = 0.0.0.0/' /etc/mysql/mysql.conf.d/mysqld.cnf
+                        sudo systemctl restart mysql
+                    fi
+                '''
+            }
+            post {
+                success {
+                    echo '✅ MySQL check/install completed successfully.'
+                }
+                failure {
+                    echo '❌ Failed to install or configure MySQL.'
+                }
+            }
+        }
+
+        stage('Build Spring Boot App') {
+            steps {
+                sh '''
+                    echo "🏗 Building Spring Boot application..."
+                    mvn clean package -DskipTests
+                '''
+            }
+            post {
+                success {
+                    echo '✅ Spring Boot application built successfully.'
+                }
+                failure {
+                    echo '❌ Spring Boot build failed.'
+                }
+            }
+        }
+
+        stage('Stop Existing Spring Boot App') {
+            steps {
+                sh '''
+                    echo "🛑 Checking for running Spring Boot app..."
+                    if pgrep -f "sak-0.0.1-SNAPSHOT.jar" > /dev/null; then
+                        echo "Stopping running Spring Boot app..."
+                        sudo pkill -f "sak-0.0.1-SNAPSHOT.jar"
+                        echo "✅ Old app stopped."
+                    else
+                        echo "ℹ No running Spring Boot app found."
+                    fi
+                '''
+            }
+            post {
+                success {
+                    echo '✅ Old Spring Boot app stop stage completed successfully.'
+                }
+                failure {
+                    echo '❌ Failed to stop old Spring Boot app.'
+                }
+            }
+        }
+
+        stage('Start New Spring Boot App') {
+            steps {
+                sh '''
+                    echo "🚀 Starting new Spring Boot app..."
+                    nohup java -jar target/sak-0.0.1-SNAPSHOT.jar > /dev/null 2>&1 &
+                    echo "✅ Spring Boot app started successfully."
+                '''
+            }
+            post {
+                success {
+                    echo '✅ Spring Boot app started successfully.'
+                }
+                failure {
+                    echo '❌ Failed to start Spring Boot app.'
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "🎯 Deployment completed successfully - Spring Boot app live."
+        }
+        failure {
+            echo "❌ Deployment failed - Check Jenkins logs."
+        }
+    }
+}
